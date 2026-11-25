@@ -1,0 +1,122 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Protection &amp; Control Schematic Simulator</title><style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--card:#f1f3f6;--bd:#c5cad2;--acc:#2563eb;--red:#d92d20;--grn:#16a34a;--org:#f59e0b;color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#14161a;--fg:#e8e8e8;--mut:#9aa0a6;--card:#1f2329;--bd:#3a3f47}}
+:root[data-theme=dark]{--bg:#14161a;--fg:#e8e8e8;--mut:#9aa0a6;--card:#1f2329;--bd:#3a3f47}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:10px}h1{font-size:17px;margin:0 0 6px}.m{color:var(--mut);margin:4px 0}
+button,select,input:not([type=range]){font:inherit;padding:5px 9px;border:1px solid var(--bd);border-radius:7px;background:var(--card);color:var(--fg);cursor:pointer}
+button{margin:0 4px 4px 0}button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button.d{background:var(--red);color:#fff;border-color:var(--red)}button.g{background:var(--grn);color:#fff;border-color:var(--grn)}
+.app{display:grid;grid-template-columns:140px 1fr 190px;gap:8px}@media(max-width:860px){.app{grid-template-columns:1fr}#pal{display:flex;flex-wrap:wrap}}
+aside{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px;overflow:auto;max-height:64vh}#pal button{display:block;width:100%;text-align:left}#pal h4{margin:8px 0 3px;font-size:11px;color:var(--mut);text-transform:uppercase;width:100%}
+aside label{display:block;font-size:11px;color:var(--mut);margin-top:6px}aside input,aside select{width:100%;box-sizing:border-box}aside input[type=checkbox]{width:auto}
+svg{width:100%;height:64vh;background:var(--bg);border:1px solid var(--bd);border-radius:8px;touch-action:none;user-select:none;display:block}
+.sy *{stroke:var(--fg);stroke-width:2;pointer-events:none}.sy .on{stroke:var(--red);stroke-width:3}.sy .th{stroke-width:4}.sy .ds{stroke-dasharray:3 3}.sy .ns{stroke:none}
+.t{font:600 11px system-ui;fill:var(--fg);pointer-events:none}.l{font:9px system-ui;fill:var(--mut);pointer-events:none}.tm{fill:var(--bg);stroke:var(--acc);stroke-width:1.5}
+#w{color:var(--red);font-weight:600;min-height:18px;margin-top:4px}#st{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 9px}pre{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 9px;min-height:50px;margin:8px 0 0;white-space:pre-wrap;font-size:12px}
+</style></head><body><main>
+<h1>Protection &amp; Control Schematic Simulator</h1>
+<div><button id="md" class="p">Mode: EDIT</button><button id="fb" class="d">Apply fault</button><input id="If" type="range" min="200" max="10000" step="100" value="3000" style="width:110px;vertical-align:middle"> <b id="ifv"></b> A
+<button onclick="rs()">Reset</button><button onclick="ex()">Example</button><button onclick="rot()">Rotate (R)</button><button onclick="del()">Delete (Del)</button><button onclick="fit()">Fit</button><button onclick="zm(.8)">+</button><button onclick="zm(1.25)">−</button><button onclick="sv2()">Save</button><button onclick="ld()">Load</button><button onclick="comps=[];wires=[];sel=null;props()">Clear</button></div>
+<p class="m">EDIT: click a palette item to add it, drag to move, drag terminal→terminal to wire, click a wire to select it. Mouse wheel zooms, drag empty space pans. RUN: click push-buttons/switches. Live nets: red = +110V, blue = 0V, orange = CT secondary.</p>
+<div class="app"><aside id="pal"></aside><svg id="s"></svg><aside id="pp"></aside></div>
+<div id="w"></div><div id="st"></div><pre id="log"></pre>
+</main><script>
+const $=i=>document.getElementById(i),sv=$('s');
+const L=(a,b,c,d,k='')=>`<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" class="${k}"/>`;
+const Rc=(x,y,w,h,f='none')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${f}"/>`;
+const lead=(a,b)=>L(0,0,0,a)+L(0,b,0,60),T2=()=>[[0,0,''],[0,60,'']];
+const cont=(nc,cl,act)=>L(0,0,0,20)+L(0,40,0,60)+(cl?L(0,40,0,20,'on'):L(0,40,-12,23))+(nc?L(-6,20,6,20):'')+(act?L(-5,30,-22,30,'ds')+(act==='pb'?L(-22,22,-22,38):'<circle cx="-25" cy="30" r="3" fill="none"/>'):'');
+const mkc=(n,nc,act)=>({n,g:'Control',b:[-30,0,60,60],t:T2,p:act?{}:{ref:'51'},d:c=>cont(nc,c.s.cl,act),lab:c=>[act?'':c.p.ref,16,34]});
+const K={
+src:{n:'DC supply',g:'Sources',b:[-20,0,40,60],t:()=>[[0,0,'+'],[0,60,'−']],p:{},d:()=>L(0,0,0,24)+L(-16,24,16,24)+L(-8,34,8,34,'th')+L(0,34,0,60),lab:()=>['110V',20,34]},
+bus:{n:'Bus bar',g:'Sources',b:c=>[-8,-8,(c.p.n-1)*20+16,16],t:c=>Array.from({length:c.p.n},(_,i)=>[i*20,0,'']),p:{n:8,label:''},d:c=>L(0,0,(c.p.n-1)*20,0,'th'),lab:c=>[c.p.label,0,-12]},
+ct:{n:'CT',g:'Protection',b:[-28,0,56,60],t:()=>[[0,0,'S1'],[0,60,'S2']],p:{pri:100},d:()=>L(0,0,0,20)+'<circle cx="0" cy="30" r="10" fill="none"/>'+L(0,40,0,60)+L(-24,30,24,30,'th')+'<circle cx="-18" cy="30" r="2.5" fill="var(--fg)"/>',lab:c=>['CT '+c.p.pri+'/5',-26,-4]},
+oc:{n:'O/C relay 51',g:'Protection',b:[-26,0,52,60],t:T2,p:{tag:'51',ps:100,tms:.2,curve:'NI'},d:c=>lead(12,48)+Rc(-20,12,40,36,c.s.op?'rgba(217,45,32,.3)':c.s.prog>0?'rgba(245,158,11,.3)':'none')+`<rect x="-16" y="42" width="${32*c.s.prog}" height="4" fill="var(--org)" class="ns"/>`,x:()=>'<text class="t" y="33" text-anchor="middle">I&gt;</text>',lab:c=>[c.p.tag,24,34]},
+brk:{n:'Breaker 52',g:'Protection',b:[-20,0,92,60],t:()=>[[0,0,'TC'],[0,60,''],[40,0,'CC'],[40,60,'']],p:{tag:'52'},d:c=>L(0,0,0,12)+L(0,48,0,60)+L(40,0,40,12)+L(40,48,40,60)+Rc(-16,12,72,36)+(c.s.closed?L(20,16,20,44,'on'):L(20,16,20,26)+L(20,34,20,44)+L(20,34,32,23))+L(15,17,25,27)+L(25,17,15,27),lab:c=>[c.p.tag,60,-4]},
+coil:{n:'Relay coil',g:'Control',b:[-20,0,40,60],t:T2,p:{tag:'86',latch:true},d:c=>lead(15,45)+Rc(-14,15,28,30,c.s.en||c.s.lat?'rgba(217,45,32,.3)':'none')+(c.p.latch?L(-14,45,14,15):''),lab:c=>[c.p.tag,18,34]},
+no:mkc('NO contact',0,''),nc:mkc('NC contact',1,''),pb:mkc('Push button NO',0,'pb'),pbn:mkc('Push button NC',1,'pb'),sw:mkc('Selector switch',0,'sw'),
+lamp:{n:'Lamp',g:'Indication',b:[-18,0,36,60],t:T2,p:{color:'red'},d:c=>lead(16,44)+`<circle cx="0" cy="30" r="14" fill="${c.s.en?(c.p.color==='green'?'#22c55e':'#ef4444'):'none'}"/>`+L(-10,20,10,40)+L(10,20,-10,40),lab:()=>['',0,0]}};
+const KC={NI:[.14,.02],VI:[13.5,1],EI:[80,2]};
+const PS={tag:['Tag','text'],ref:['Follows tag (coil / relay / breaker)','text'],ps:['Plug setting % of 5A',50,200,25],tms:['TMS',.05,1,.05],curve:['Curve',['NI','VI','EI']],pri:['CT primary (A)',[100,200,400,800]],latch:['Latched (lockout)','chk'],color:['Colour',['red','green']],n:['Terminals',2,40,1],label:['Label','text']};
+const S0={en:0,lat:0,op:0,prog:0,closed:true,cl:0,on:0,i:0};
+const S={run:0,fault:0,If:3000,ip:100,tf:0,short:0,open:0};
+let comps=[],wires=[],sel=null,selW=null,drag=null,wiring=null,pan=null,hold=null,idc=1,logs=[],prev={},V={x:-80,y:-60,w:760};
+const log=m=>{logs.unshift(m);logs=logs.slice(0,8)},sn=v=>Math.round(v/20)*20;
+const bb=c=>{const b=K[c.k].b;return typeof b==='function'?b(c):b};
+function add(k,x,y,p,r){const c={id:'c'+idc++,k,x:x??sn(V.x+V.w/2)+(comps.length%5)*20,y:y??sn(V.y+V.w*.2)+(comps.length%5)*20,r:r||0,p:{...K[k].p,...p},s:{...S0}};comps.push(c);return c}
+function del(){if(selW!=null){wires.splice(selW,1);selW=null}else if(sel){const d=sel+'.';comps=comps.filter(c=>c.id!==sel);wires=wires.filter(w=>!w[0].startsWith(d)&&!w[1].startsWith(d));sel=null}props()}
+function rot(){const c=comps.find(x=>x.id===sel);if(c)c.r=(c.r+1)%4}
+function rs(){comps.forEach(c=>{const sw=c.s.on&&c.k==='sw';c.s={...S0,on:sw?1:0}});S.fault=0;S.tf=0;prev={};log('Reset: lockouts cleared, breaker closed, fault cleared')}
+function ex(){comps=[];wires=[];idc=1;sel=null;const A=add,W=(a,i,b,j)=>wires.push([a.id+'.'+i,b.id+'.'+j]);
+const bp=A('bus',180,40,{n:24,label:'+110V DC'}),bn=A('bus',180,480,{n:24,label:'0V'}),s=A('src',180,200),ct=A('ct',20,100,{pri:100}),oc=A('oc',120,100,{tag:'51'});
+const k51=A('no',260,100,{ref:'51'}),k86=A('coil',260,220,{tag:'86',latch:true}),n86=A('no',380,100,{ref:'86'}),cb=A('brk',380,320,{tag:'52'});
+const pb=A('pb',420,80),x86=A('nc',420,160,{ref:'86'}),x52=A('nc',420,240,{ref:'52'}),ka=A('no',540,80,{ref:'52'}),la=A('lamp',540,160,{color:'red'}),kb=A('nc',600,80,{ref:'52'}),lb=A('lamp',600,160,{color:'green'});
+W(bp,0,s,0);W(s,1,bn,0);W(ct,0,oc,0);W(ct,1,oc,1);W(bp,4,k51,0);W(k51,1,k86,0);W(k86,1,bn,4);W(bp,10,n86,0);W(n86,1,cb,0);W(cb,1,bn,10);
+W(bp,12,pb,0);W(pb,1,x86,0);W(x86,1,x52,0);W(x52,1,cb,2);W(cb,3,bn,12);W(bp,18,ka,0);W(ka,1,la,0);W(la,1,bn,18);W(bp,21,kb,0);W(kb,1,lb,0);W(lb,1,bn,21);
+prev={};log('Example loaded: 51 → 86 lockout → breaker trip; close via push-button (interlocked by 86 NC and 52b)');props()}
+function nets(){const p={},f=x=>{if(p[x]===undefined)p[x]=x;return p[x]===x?x:(p[x]=f(p[x]))},u=(a,b)=>{p[f(a)]=f(b)};
+wires.forEach(w=>u(w[0],w[1]));comps.forEach(c=>{if(c.k==='bus')for(let i=1;i<c.p.n;i++)u(c.id+'.0',c.id+'.'+i);if(c.s.cl)u(c.id+'.0',c.id+'.1')});return f}
+function pn(f){const P=new Set(),N=new Set();comps.forEach(s=>{if(s.k==='src'){P.add(f(s.id+'.0'));N.add(f(s.id+'.1'))}});return[P,N]}
+function en(c,f,i=0,j=1){const[P,N]=pn(f);if([...P].some(x=>N.has(x))){S.short=1;return false}const a=f(c.id+'.'+i),b=f(c.id+'.'+j);return a!==b&&((P.has(a)&&N.has(b))||(N.has(a)&&P.has(b)))}
+const tmap=()=>{const m={};comps.forEach(c=>{const t=c.p.tag;if(t===undefined)return;const v=c.k==='coil'?c.s.en||c.s.lat:c.k==='oc'?c.s.op:c.k==='brk'?c.s.closed:0;m[t]=m[t]||!!v});return m};
+function step(dt){S.short=0;S.open=0;const brk=comps.filter(c=>c.k==='brk'),live=!brk.length||brk.some(c=>c.s.closed);S.ip=live?(S.fault?S.If:100):0;
+let f=nets();const ocs=comps.filter(c=>c.k==='oc'),cts=comps.filter(c=>c.k==='ct');
+const mt=(t,o)=>{const a=f(t.id+'.0'),b=f(t.id+'.1'),x=f(o.id+'.0'),y=f(o.id+'.1');return a!==b&&((a===x&&b===y)||(a===y&&b===x))};
+cts.forEach(t=>{if(S.ip>0&&!ocs.some(o=>mt(t,o)))S.open=1});
+ocs.forEach(o=>{o.s.i=0;cts.forEach(t=>{if(mt(t,o))o.s.i=S.ip/(t.p.pri/5)});const M=o.s.i/(o.p.ps/100*5);let t=Infinity;if(M>1.0001){const[k,a]=KC[o.p.curve];t=o.p.tms*k/(M**a-1)}
+if(t<Infinity)o.s.prog=Math.min(1,o.s.prog+dt/t);else o.s.prog=Math.max(0,o.s.prog-dt*.5);if(o.s.prog>=1)o.s.op=1;else if(o.s.prog<=0)o.s.op=0});
+if(S.fault&&live)S.tf+=dt;
+for(let it=0;it<8;it++){const m=tmap();let ch=0;
+comps.forEach(c=>{const o=c.s.cl;if(c.k==='no')c.s.cl=!!m[c.p.ref];else if(c.k==='nc')c.s.cl=!m[c.p.ref];else if(c.k==='pb'||c.k==='sw')c.s.cl=!!c.s.on;else if(c.k==='pbn')c.s.cl=!c.s.on;if(o!==c.s.cl)ch=1});
+f=nets();
+comps.forEach(c=>{const o=JSON.stringify(c.s);if(c.k==='coil'){c.s.en=en(c,f);if(c.s.en&&c.p.latch)c.s.lat=1}else if(c.k==='lamp')c.s.en=en(c,f);else if(c.k==='brk'){const tc=en(c,f,0,1),cc=en(c,f,2,3);if(tc)c.s.closed=false;else if(cc)c.s.closed=true}if(JSON.stringify(c.s)!==o)ch=1});
+if(!ch)break}
+comps.forEach(c=>{const v=c.k==='coil'?!!(c.s.en||c.s.lat):c.k==='oc'?!!c.s.op:c.k==='brk'?!!c.s.closed:undefined;if(v===undefined)return;
+if(prev[c.id]!==undefined&&prev[c.id]!==v)log(`${c.p.tag} ${c.k==='brk'?(v?'CLOSED':'TRIPPED'):c.k==='oc'?(v?'operated':'reset'):(v?'energised':'de-energised')}  (fault time ${S.tf.toFixed(2)} s)`);prev[c.id]=v})}
+function P(id){const[ci,ti]=id.split('.'),c=comps.find(x=>x.id===ci);if(!c)return null;const d=K[c.k].t(c)[ti];if(!d)return null;const m=[[1,0,0,1],[0,-1,1,0],[-1,0,0,-1],[0,1,-1,0]][c.r];return{x:c.x+m[0]*d[0]+m[1]*d[1],y:c.y+m[2]*d[0]+m[3]*d[1],r:c.r}}
+function render(){const f=nets(),[Pp,Nn]=pn(f),cn=new Set();if(S.ip>0)comps.filter(c=>c.k==='ct').forEach(c=>{cn.add(f(c.id+'.0'));cn.add(f(c.id+'.1'))});
+const r=sv.getBoundingClientRect();if(!r.width)return;sv.setAttribute('viewBox',`${V.x} ${V.y} ${V.w} ${V.w*r.height/r.width}`);
+let h='<defs><pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="var(--bd)"/></pattern></defs><rect x="-4000" y="-4000" width="8000" height="8000" fill="url(#g)"/>';
+wires.forEach((w,i)=>{const a=P(w[0]),b=P(w[1]);if(!a||!b)return;const n=f(w[0]),col=Pp.has(n)?'var(--red)':Nn.has(n)?'#2563eb':cn.has(n)?'var(--org)':'var(--mut)';
+const d=a.r%2===0?`M${a.x} ${a.y}V${sn((a.y+b.y)/2)}H${b.x}V${b.y}`:`M${a.x} ${a.y}H${sn((a.x+b.x)/2)}V${b.y}H${b.x}`;
+h+=`<path d="${d}" fill="none" stroke="${i===selW?'var(--acc)':col}" stroke-width="${i===selW?4:2.5}"/><path data-w="${i}" d="${d}" fill="none" stroke="transparent" stroke-width="12" style="cursor:pointer"/>`});
+if(wiring){const a=P(wiring.f);if(a)h+=`<path d="M${a.x} ${a.y}L${wiring.x} ${wiring.y}" stroke="var(--acc)" stroke-dasharray="5" fill="none" stroke-width="2"/>`}
+comps.forEach(c=>{const k=K[c.k],b=bb(c),lb=k.lab?k.lab(c):['',0,0];
+h+=`<g transform="translate(${c.x} ${c.y}) rotate(${c.r*90})"><rect data-c="${c.id}" x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" fill="transparent" ${c.id===sel?'stroke="var(--acc)" stroke-dasharray="4"':''} style="cursor:${S.run?'pointer':'move'}"/><g class="sy">${k.d(c)}</g>${k.x?k.x(c):''}`;
+if(lb[0])h+=`<text class="t" transform="translate(${lb[1]} ${lb[2]}) rotate(${-90*c.r})">${lb[0]}</text>`;
+k.t(c).forEach((q,i)=>{h+=`<circle class="tm" cx="${q[0]}" cy="${q[1]}" r="${c.k==='bus'?3:4.5}"/><circle data-t="${c.id}.${i}" cx="${q[0]}" cy="${q[1]}" r="9" fill="transparent" style="cursor:crosshair"/>`;if(q[2])h+=`<text class="l" transform="translate(${q[0]} ${q[1]}) rotate(${-90*c.r})" x="8" y="${q[1]===0?-4:12}">${q[2]}</text>`});h+='</g>'});
+sv.innerHTML=h;
+$('w').textContent=S.short?'⚠ DC short circuit: + and 0V are connected':S.open?'⚠ CT secondary OPEN (not wired to a relay) – dangerous voltage in real life!':'';
+$('st').innerHTML=`<b>${S.run?'RUN':'EDIT'}</b> | Primary ${S.ip.toFixed(0)} A | ${comps.filter(c=>c.k==='oc').map(o=>`${o.p.tag}: ${o.s.i.toFixed(2)} A, timer ${Math.round(o.s.prog*100)}%`).join(' | ')} | Fault time ${S.tf.toFixed(2)} s`;
+$('log').textContent=logs.join('\n')||'Event log…';$('fb').textContent=S.fault?'Clear fault':'Apply fault';$('md').textContent='Mode: '+(S.run?'RUN':'EDIT')}
+function props(){const c=comps.find(x=>x.id===sel);if(!c){$('pp').innerHTML='<p class="m">Select a part to edit its properties.</p>';return}
+$('pp').innerHTML='<b>'+K[c.k].n+'</b>'+Object.keys(c.p).map(k=>{const d=PS[k],v=c.p[k];let h='<label>'+d[0]+'</label>';
+if(d[1]==='text')h+=`<input data-k="${k}" value="${v}">`;else if(d[1]==='chk')h+=`<input type="checkbox" data-k="${k}" ${v?'checked':''}>`;
+else if(Array.isArray(d[1]))h+=`<select data-k="${k}">${d[1].map(o=>`<option ${o==v?'selected':''}>${o}</option>`).join('')}</select>`;
+else h+=`<input type="number" data-k="${k}" min="${d[1]}" max="${d[2]}" step="${d[3]}" value="${v}">`;return h}).join('')}
+$('pp').oninput=e=>{const t=e.target,k=t.dataset.k,c=comps.find(x=>x.id===sel);if(!k||!c)return;c.p[k]=t.type==='checkbox'?t.checked:(t.type==='number'||k==='pri')?+t.value:t.value};
+let g='';Object.keys(K).forEach(k=>{if(K[k].g!==g){g=K[k].g;$('pal').innerHTML+=`<h4>${g}</h4>`}$('pal').innerHTML+=`<button onclick="add('${k}');sel=comps[comps.length-1].id;props()">${K[k].n}</button>`});
+const pt=e=>{const r=sv.getBoundingClientRect();return{x:V.x+(e.clientX-r.left)*V.w/r.width,y:V.y+(e.clientY-r.top)*V.w/r.width}};
+function zm(k){const r=sv.getBoundingClientRect(),h=V.w*r.height/r.width,cx=V.x+V.w/2,cy=V.y+h/2;V.w*=k;V.x=cx-V.w/2;V.y=cy-V.w*r.height/r.width/2}
+function fit(){if(!comps.length)return;const r=sv.getBoundingClientRect();let a=1e9,b=1e9,c2=-1e9,d=-1e9;comps.forEach(c=>K[c.k].t(c).forEach((_,i)=>{const q=P(c.id+'.'+i);a=Math.min(a,q.x);b=Math.min(b,q.y);c2=Math.max(c2,q.x);d=Math.max(d,q.y)}));
+const w=Math.max(c2-a+160,(d-b+120)*r.width/r.height);V.w=w;V.x=(a+c2)/2-w/2;V.y=(b+d)/2-w*r.height/r.width/2}
+sv.addEventListener('wheel',e=>{e.preventDefault();const p=pt(e),k=e.deltaY>0?1.12:1/1.12;V.x=p.x-(p.x-V.x)*k;V.y=p.y-(p.y-V.y)*k;V.w*=k},{passive:false});
+sv.addEventListener('pointerdown',e=>{e.target.releasePointerCapture?.(e.pointerId);const d=e.target.dataset,p=pt(e),pn0={x:e.clientX,y:e.clientY,vx:V.x,vy:V.y};
+if(S.run){const c=d.c&&comps.find(x=>x.id===d.c);if(c){if(c.k==='sw')c.s.on=c.s.on?0:1;else if(c.k==='pb'||c.k==='pbn'){c.s.on=1;hold=c}}else pan=pn0;return}
+if(d.t)wiring={f:d.t,x:p.x,y:p.y};
+else if(d.c){sel=d.c;selW=null;const c=comps.find(x=>x.id===d.c);drag={id:d.c,dx:p.x-c.x,dy:p.y-c.y};props()}
+else if(d.w!==undefined){selW=+d.w;sel=null;props()}else{sel=null;selW=null;props();pan=pn0}});
+addEventListener('pointermove',e=>{if(pan){const r=sv.getBoundingClientRect();V.x=pan.vx-(e.clientX-pan.x)*V.w/r.width;V.y=pan.vy-(e.clientY-pan.y)*V.w/r.width;return}
+const p=pt(e);if(drag){const c=comps.find(x=>x.id===drag.id);c.x=sn(p.x-drag.dx);c.y=sn(p.y-drag.dy)}if(wiring){wiring.x=p.x;wiring.y=p.y}});
+addEventListener('pointerup',e=>{pan=null;if(hold){hold.s.on=0;hold=null}
+if(wiring){const el=document.elementFromPoint(e.clientX,e.clientY),t=el&&el.dataset&&el.dataset.t;if(t&&t!==wiring.f&&!wires.some(w=>w.includes(wiring.f)&&w.includes(t)))wires.push([wiring.f,t]);wiring=null}drag=null});
+addEventListener('keydown',e=>{if(/INPUT|SELECT/.test(e.target.tagName))return;if(e.key==='Delete'||e.key==='Backspace')del();if(e.key==='r'||e.key==='R')rot();if(e.key==='Escape'){sel=null;selW=null;props()}});
+$('md').onclick=()=>{S.run=S.run?0:1;wiring=null;drag=null};
+$('fb').onclick=()=>{if(!S.fault){S.fault=1;S.tf=0;log('Fault applied: '+S.If+' A')}else{S.fault=0;log('Fault cleared')}};
+$('If').oninput=e=>{S.If=+e.target.value;$('ifv').textContent=S.If};$('ifv').textContent=S.If;
+function sv2(){try{localStorage.setItem('ocsim',JSON.stringify({comps,wires,idc}));log('Saved to this browser')}catch(e){log('Save not available here')}}
+function ld(){try{const d=JSON.parse(localStorage.getItem('ocsim'));comps=d.comps;wires=d.wires;idc=d.idc;prev={};sel=null;log('Loaded');props()}catch(e){log('Nothing saved')}}
+let last=performance.now();function loop(n){const dt=Math.min(.05,(n-last)/1000);last=n;step(dt);render();requestAnimationFrame(loop)}
+ex();props();requestAnimationFrame(()=>{fit();requestAnimationFrame(loop)});
+</script></body></html>

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://simryb.com/sitemap.xml
